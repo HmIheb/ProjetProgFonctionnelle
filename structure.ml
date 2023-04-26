@@ -52,7 +52,47 @@ let frag (s :string ) =
 
 
 
+(* type terme  = {name : string ; ar : int ; arg : terme list} ;; *)
+
+(* 
+l'entrée : deux termes.
+la sortie : des variables differentes ancrés.****
+
+probleme : c'est la resolution  
+
+*)
+
+type eq = {right : terme ; left : terme} ;;
+
+(* @return liste d'equations  *)
+
+(* @return liste d'equations *)
+let rec unif_term (term1:terme) (term2:terme)  = 
+if (term1.ar < 1 || term2.ar < 1 ) then [{right =term1 ; left=term2}]
+  
+else if (term1.ar == term2.ar && (String.equal term1.name term2.name)) then 
+  let rec unif_arg arg_term1 arg_term2 =
+    match arg_term1, arg_term2 with
+    | [],_ -> []
+    | t::q , x::y -> (unif_term t x)@(unif_arg q y) in
+  (unif_arg term1.arg term2.arg)
+else failwith "kmok (differentes arités ou differentes noms)" ;;
+
+unif_term (part "F(toz,g(a),X)") (part "F(Zebi,g(X,u),t)") ;;
+
+let rec simple_sys l acc = 
+  match l  with
+  | [] -> []
+  | t::q ->
+     if (String.equal t.right.name t.left.name) then 
+                if (t.right.ar < 1 && t.left.ar < 1) then 
+                  (simple_sys q acc)
+            else if (t.left.ar >= 0 && t.right.ar == -1 ) then 
+              [{right = t.left ; left = t.right}]@(simple_sys q  acc@[{right = t.left ; left = t.right}] )
+                  else if (t.left.ar == -1)
+                    simple_sys q acc@[t]
 (*getters*)
 let getn x = x.name ;;
 let geta x = x.ar ;;
 let getl x = x.arg ;;
+
