@@ -78,19 +78,44 @@ else if (term1.ar == term2.ar && (String.equal term1.name term2.name)) then
   (unif_arg term1.arg term2.arg)
 else failwith "kmok (differentes arités ou differentes noms)" ;;
 
-unif_term (part "F(toz,g(a),X)") (part "F(Zebi,g(X,u),t)") ;;
+(* unif_term (part "F(toz,g(a),X)") (part "F(Zebi,g(u),t)") ;; *)
 
-let rec simple_sys l acc = 
+let variable_est_repeter (variable : string) (fonction : string) = 
+  let re = Str.regexp_string variable
+    in
+        try ignore (Str.search_forward re fonction 0); true
+        with Not_found -> false ;;
+
+let rec simple_sys (l:eq list) acc= 
   match l  with
   | [] -> []
   | t::q ->
-     if (String.equal t.right.name t.left.name) then 
-                if (t.right.ar < 1 && t.left.ar < 1) then 
-                  (simple_sys q acc)
-            else if (t.left.ar >= 0 && t.right.ar == -1 ) then 
-              [{right = t.left ; left = t.right}]@(simple_sys q  acc@[{right = t.left ; left = t.right}] )
-                  else if (t.left.ar == -1)
-                    simple_sys q acc@[t]
+      
+
+    if (String.equal t.right.name t.left.name)  then 
+        if (t.right.ar > 0 && t.left.ar > 0 && t.right.ar!= t.left.ar ) then (*f(X)=f(Y,Z)*)
+          failwith "kmok (f(X)=f(Y,Z))"
+        else if (t.right.ar < 1 && t.left.ar < 1) then  (* X=X; a=a *)
+          (simple_sys q acc) 
+        else
+            (simple_sys (append (unif_term t.left t.right) q) acc)        
+      else 
+        if (t.right.ar == 0 && t.left.ar == 0) then
+          failwith "kmok (a=b)"
+
+        else if (t.left.ar >= 0 && t.right.ar == -1 ) then (* a=X ; f(X)=X *)
+          (simple_sys q [{right = t.left ; left = t.right}]@acc)
+            else if (t.right.ar == 0) then (* X=a *)
+                  simple_sys q [t]@acc
+                else if (t.right.ar > 0) then (* x=f(..) *)
+                  if ( variable_est_repeter t.left.name t.right.name) then (* x=f(X) *)
+                    failwith "kmok (x=f(X))"
+                  else (* x=f(Y) *)
+                    simple_sys q  [t]@acc 
+                else   (* X=Y *)
+                  simple_sys q  [t]@acc ;;  
+
+
 (*getters*)
 let getn x = x.name ;;
 let geta x = x.ar ;;
