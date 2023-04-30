@@ -29,12 +29,21 @@ let estpasfonction s = Bool.not (String.contains s '(') ;;
 (* Permet de determine l'arité d'un terme -1 si c'est une variable 0 si c'est une constante*)
 let xouc s = if maj (String.get s 0) then -1 else 0 ;;
 
+ (* Trouve la bonne parenthese fermante relié a la premiere parenthese ouvrante trouvé *)
+  let findpar s start =
+     let rec helper s start stack = match s.[start] with
+      | '(' -> helper s (start + 1) (start :: stack) 
+      | ')' -> (match stack with 
+      | [] -> failwith "Unmatched closing parenthesis" 
+      | top :: rest -> if rest = [] then start else helper s (start + 1) rest) 
+      | _ -> helper s (start + 1) stack in helper s start [] ;;
+
 (* Decoupe s En terme de premier ordre et les mets dans l puis renvoie l 
 Todo Rectifier Les cas multi parenthese ')' *)
 let rec bayd (s:string ) (l:string list) = 
   if  ( String.equal s "" )then l 
   else if (Bool.not (String.contains s ',')) then l@[s]
-  else if (String.contains (Str.string_before s (Str.search_forward (Str.regexp{|,|}) s 0 )) '(' ) then bayd (Str.string_after s ((Str.search_forward (Str.regexp {|)|}) s 0)+1) ) l@[(Str.string_before s ((Str.search_forward (Str.regexp {|)|}) s 0)+1))]
+  else if (String.contains (Str.string_before s (Str.search_forward (Str.regexp{|,|}) s 0 )) '(' ) then bayd (Str.string_after s ((findpar s 0)+2) ) l@[(Str.string_before s ((findpar s 0)+1))]
   else bayd (Str.string_after s ((Str.search_forward (Str.regexp {|,|}) s 0)+1) ) l@[Str.string_before s (Str.search_forward (Str.regexp {|,|}) s 0 )]
 ;;
 
@@ -120,4 +129,62 @@ let rec simple_sys (l:eq list) acc=
 let getn x = x.name ;;
 let geta x = x.ar ;;
 let getl x = x.arg ;;
+
+ (* Transforme un terme en String*)
+  let rec t2s (t:terme):string =
+     if(t.ar<1) then t.name 
+    else let rec concatlt l = match l with
+     | [] -> "" 
+     | h::q -> if q = [] then (t2s h) 
+    else ((t2s h)^",")^(concatlt q) in t.name^"("^(concatlt t.arg)^")" 
+  ;; 
+
+    (* Type Permutation avec Gauche droite et la variable qui les remplace *)
+     type perm = {var: terme ; left : terme ; right : terme} ;;
+      
+     (* Contain sur les list de permutation *)
+       let rec permcontain (t1:terme) (t2:terme) (buf:perm list) = match buf with 
+       |[]-> false 
+       |hd::tl -> (hd.left=t1 && hd.right=t2)||(permcontain t1 t2 tl) 
+      ;;
+
+      (* Avoir une Permutation si on sait qu'elle existe *) 
+      let getperm t1 t2 buf = 
+        let rec help buff = match buff with 
+        |[] -> t1 
+        |hd::q -> if (hd.left=t1 && hd.right=t2) then hd.var 
+        else help q 
+      in help buf ;; 
+        (* Union de deux Listes *) 
+        let rec union l1 l2 = 
+          let rec f x l = match l with 
+          | [] -> true 
+          | hd::tl -> if x = hd then false 
+          else f x tl in match l2 with 
+          | [] -> l1 
+          | hd::tl -> if f hd l1 then union (hd::l1) tl 
+          else union l1 tl ;;
+           (* Toute les permutation à faire entre 2 termes *)
+            let rec fly t1 t2 buf = 
+              if (t1 = t2) then buf 
+              else if (permcontain t1 t2 buf) then buf 
+              else if t1.ar>=1 && t1.ar == t2.ar && (String.equal t1.name t2.name) then 
+                let rec flyh l1 l2 buff = match l1,l2 with 
+                |[],[] -> buff 
+                |t::q,hd::tl -> if (fly t hd buff = buff || t=hd) then buff 
+                else union (buf@(fly t hd buff)) (flyh q tl (buf@(fly t hd buff))) 
+              in flyh t1.arg t2.arg buf 
+            else buf@[{left = t1 ; right = t2; var = { name= ("Z"^(Int.to_string(List.length buf))) ; ar= (-1) ; arg=[] } }] ;;
+             (* Anti-unification *)
+              let rec antiuni (t1:terme) (t2:terme) (buf: perm list) = 
+                if t1.ar>=1 && t1.ar == t2.ar && (String.equal t1.name t2.name) then
+                   {name=t1.name ; ar =t1.ar ; arg =
+                    let rec lantiuni l1 l2 b = match l1,l2 with 
+                    | [],[] -> []; 
+                    | t::q , hd::tl -> [antiuni t hd b]@(lantiuni q tl (fly t hd b)) 
+                  in lantiuni t1.arg t2.arg (fly t1 t2 buf) } 
+                else if (t1.ar == t2.ar && (String.equal t1.name t2.name))then t1 
+                else if (permcontain t1 t2 buf) then (getperm t1 t2 buf)
+                 else { name= ("Z"^(Int.to_string(List.length buf))) ; ar= (-1) ; arg=[] } ;; 
+
 
