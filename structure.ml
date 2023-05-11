@@ -113,7 +113,8 @@ let rec simple_sys (l:eq list) acc=
           failwith "kmok (a=b)"
 
         else if (t.left.ar >= 0 && t.right.ar == -1 ) then (* a=X ; f(X)=X *)
-          (simple_sys q [{right = t.left ; left = t.right}]@acc)
+          let e = {right = t.left ; left = t.right} in
+          simple_sys q [e]@acc
             else if (t.right.ar == 0) then (* X=a *)
                   simple_sys q [t]@acc
                 else if (t.right.ar > 0) then (* x=f(..) *)
@@ -124,7 +125,8 @@ let rec simple_sys (l:eq list) acc=
                 else   (* X=Y *)
                   simple_sys q  [t]@acc ;;  
 
-
+(simple_sys (unif_term (part "F(t,g(a),X,K)") (part "F(Z,g(Y),t,i)"))  []);;
+(unif_term (part "F(t,g(a),X)") (part "F(Z,g(Y),t)")) ;;
 (*getters*)
 let getn x = x.name ;;
 let geta x = x.ar ;;
