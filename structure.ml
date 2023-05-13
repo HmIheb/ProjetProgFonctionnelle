@@ -71,13 +71,13 @@ probleme : c'est la resolution
 
 *)
 
-type eq = {right : terme ; left : terme} ;;
+type eq = {left : terme ; right : terme} ;;
 
 (* @return liste d'equations  *)
 
 (* @return liste d'equations *)
 let rec unif_term (term1:terme) (term2:terme)  = 
-if (term1.ar < 1 || term2.ar < 1 ) then [{right =term1 ; left=term2}]
+if (term1.ar < 1 || term2.ar < 1 ) then [{left =term1 ; right=term2}]
   
 else if (term1.ar == term2.ar && (String.equal term1.name term2.name)) then 
   let rec unif_arg arg_term1 arg_term2 =
@@ -89,18 +89,19 @@ else failwith "kmok (differentes arités ou differentes noms)" ;;
 
 (* unif_term (part "F(toz,g(a),X)") (part "F(Zebi,g(u),t)") ;; *)
 
-let variable_est_repeter (variable : string) (fonction : string) = 
-  let re = Str.regexp_string variable
-    in
-        try ignore (Str.search_forward re fonction 0); true
-        with Not_found -> false ;;
+let rec variable_est_repeter (variable : string) (args:terme list) = 
+  match args with
+  | [] -> false
+  | t::q -> if ( String.equal variable t.name ) then
+                true
+            else if (t.ar > 0) then
+              (variable_est_repeter variable t.arg) || (variable_est_repeter variable q)
+            else (variable_est_repeter variable t.arg) || (variable_est_repeter variable q) ;;    
 
-let rec simple_sys (l:eq list) acc= 
+let rec simple_sys (l:eq list) acc = 
   match l  with
-  | [] -> []
+  | [] -> acc
   | t::q ->
-      
-
     if (String.equal t.right.name t.left.name)  then 
         if (t.right.ar > 0 && t.left.ar > 0 && t.right.ar!= t.left.ar ) then (*f(X)=f(Y,Z)*)
           failwith "kmok (f(X)=f(Y,Z))"
@@ -118,75 +119,142 @@ let rec simple_sys (l:eq list) acc=
             else if (t.right.ar == 0) then (* X=a *)
                   simple_sys q [t]@acc
                 else if (t.right.ar > 0) then (* x=f(..) *)
-                  if ( variable_est_repeter t.left.name t.right.name) then (* x=f(X) *)
+                  let tt = t.right in
+                  if ( variable_est_repeter t.left.name t.right.arg ) then (* x=f(X) *)
                     failwith "kmok (x=f(X))"
                   else (* x=f(Y) *)
                     simple_sys q  [t]@acc 
                 else   (* X=Y *)
                   simple_sys q  [t]@acc ;;  
 
-(simple_sys (unif_term (part "F(t,g(a),X,K)") (part "F(Z,g(Y),t,i)"))  []);;
-(unif_term (part "F(t,g(a),X)") (part "F(Z,g(Y),t)")) ;;
+(* substitution dans une liste de termes avec une equation*)
+let rec sub_term eq l  =
+  match l with
+  | [] -> []
+  | t::q -> if(String.equal eq.left.name t.name) then (* X=a  X *)
+                [eq.right]@sub_term eq q (* X=a  a *)
+            else if (t.ar > 0) then  (* X=a   f(x) *)
+              let subb = (sub_term eq t.arg) in
+              let termm = {name = t.name; ar = t.ar; arg = subb} in
+              [termm]@(sub_term eq q)  
+            else [t]@(sub_term eq q) ;; (* X=a  Z *)
+
+(* substitution dans une liste d'equations avec une equation*)            
+let rec sub_eq eq l =
+  match l with
+  | [] -> []
+  | t::q -> if(String.equal eq.left.name t.left.name) then 
+              if (String.equal eq.right.name t.right.name) then 
+                sub_eq eq q
+              else if (eq.left.ar == -1) then 
+                      [t]@sub_eq eq q
+                    else  if (t.right.ar == -1) then 
+                            [t]@sub_eq eq q
+                          else  failwith "kmok (X=a, X=f(t))"
+            else if (eq.right.ar <=0 && t.right.ar > 0) then (* X=a , Y=f(...) *)
+                  let args = (sub_term eq  t.right.arg) in
+                  let termm = {name = t.right.name ; ar = t.right.ar ; arg = args} in
+                  let eqq = {left = t.left ; right = termm } in
+                  [eqq]@sub_eq eq q
+                else  [t]@sub_eq eq q ;;
+
+
+(* fait les substitutions sur entre les equations d'in system *)
+let rec remp_sys (l:eq list) acc =
+  match l with
+  | [] -> acc
+  | t::q -> let sys = (sub_eq t q) in
+            (remp_sys sys [t]@acc)  ;;
+
+(* unifier une listes de termes par une liste d'equations *)                      
+let rec unifier_args args sys  =
+match args with
+| [] -> []
+| arg::q -> match sys with
+| [] -> []      
+|  eq::qq -> if (String.equal arg.name eq.left.name) then 
+                [eq.right]@unifier_args q sys
+            else let term = unifier_term arg qq in
+                [term]@unifier_args  q sys 
+
+                and  
+(* unifier un terme par une liste d'equations *)          
+unifier_term term (sys:eq list) = 
+            match sys with
+            | [] -> term  
+            | eq::q -> if (String.equal term.name eq.left.name) then 
+                              eq.right
+                      else if (term.ar <= 0) then
+                        term
+                          else  
+                            let args = unifier_args term.arg sys in
+                            let termm = {name = term.name ; ar = term.ar ; arg = term.arg} in
+                            termm ;;
+
+
+(* (unif_term (part "F(t,g(a),X)") (part "F(Z,g(Y),t)")) ;; *)
+(remp_sys (simple_sys (unif_term (part "F(t,g(a,k(X)),X,K)") (part "F(Z,g(Y,O),t,i)"))  []) []);;
 (*getters*)
 let getn x = x.name ;;
 let geta x = x.ar ;;
 let getl x = x.arg ;;
 
  (* Transforme un terme en String*)
-  let rec t2s (t:terme):string =
-     if(t.ar<1) then t.name 
-    else let rec concatlt l = match l with
-     | [] -> "" 
-     | h::q -> if q = [] then (t2s h) 
-    else ((t2s h)^",")^(concatlt q) in t.name^"("^(concatlt t.arg)^")" 
-  ;; 
+let rec t2s (t:terme):string =
+    if(t.ar<1) then t.name 
+  else let rec concatlt l = match l with
+    | [] -> "" 
+    | h::q -> if q = [] then (t2s h) 
+  else ((t2s h)^",")^(concatlt q) in t.name^"("^(concatlt t.arg)^")" 
+;; 
 
-    (* Type Permutation avec Gauche droite et la variable qui les remplace *)
-     type perm = {var: terme ; left : terme ; right : terme} ;;
+(* Type Permutation avec Gauche droite et la variable qui les remplace *)
+type perm = {var: terme ; left : terme ; right : terme} ;;
       
-     (* Contain sur les list de permutation *)
-       let rec permcontain (t1:terme) (t2:terme) (buf:perm list) = match buf with 
-       |[]-> false 
-       |hd::tl -> (hd.left=t1 && hd.right=t2)||(permcontain t1 t2 tl) 
-      ;;
+(* Contain sur les list de permutation *)
+  let rec permcontain (t1:terme) (t2:terme) (buf:perm list) = match buf with 
+  |[]-> false 
+  |hd::tl -> (hd.left=t1 && hd.right=t2)||(permcontain t1 t2 tl) 
+;;
 
-      (* Avoir une Permutation si on sait qu'elle existe *) 
-      let getperm t1 t2 buf = 
-        let rec help buff = match buff with 
-        |[] -> t1 
-        |hd::q -> if (hd.left=t1 && hd.right=t2) then hd.var 
-        else help q 
-      in help buf ;; 
-        (* Union de deux Listes *) 
-        let rec union l1 l2 = 
-          let rec f x l = match l with 
-          | [] -> true 
-          | hd::tl -> if x = hd then false 
-          else f x tl in match l2 with 
-          | [] -> l1 
-          | hd::tl -> if f hd l1 then union (hd::l1) tl 
-          else union l1 tl ;;
-           (* Toute les permutation à faire entre 2 termes *)
-            let rec fly t1 t2 buf = 
-              if (t1 = t2) then buf 
-              else if (permcontain t1 t2 buf) then buf 
-              else if t1.ar>=1 && t1.ar == t2.ar && (String.equal t1.name t2.name) then 
-                let rec flyh l1 l2 buff = match l1,l2 with 
-                |[],[] -> buff 
-                |t::q,hd::tl -> if (fly t hd buff = buff || t=hd) then buff 
-                else union (buf@(fly t hd buff)) (flyh q tl (buf@(fly t hd buff))) 
-              in flyh t1.arg t2.arg buf 
-            else buf@[{left = t1 ; right = t2; var = { name= ("Z"^(Int.to_string(List.length buf))) ; ar= (-1) ; arg=[] } }] ;;
-             (* Anti-unification *)
-              let rec antiuni (t1:terme) (t2:terme) (buf: perm list) = 
-                if t1.ar>=1 && t1.ar == t2.ar && (String.equal t1.name t2.name) then
-                   {name=t1.name ; ar =t1.ar ; arg =
-                    let rec lantiuni l1 l2 b = match l1,l2 with 
-                    | [],[] -> []; 
-                    | t::q , hd::tl -> [antiuni t hd b]@(lantiuni q tl (fly t hd b)) 
-                  in lantiuni t1.arg t2.arg (fly t1 t2 buf) } 
-                else if (t1.ar == t2.ar && (String.equal t1.name t2.name))then t1 
-                else if (permcontain t1 t2 buf) then (getperm t1 t2 buf)
-                 else { name= ("Z"^(Int.to_string(List.length buf))) ; ar= (-1) ; arg=[] } ;; 
+(* Avoir une Permutation si on sait qu'elle existe *) 
+let getperm t1 t2 buf = 
+  let rec help buff = match buff with 
+    |[] -> t1 
+    |hd::q -> if (hd.left=t1 && hd.right=t2) then hd.var 
+      else help q 
+  in help buf ;; 
+  (* Union de deux Listes *) 
+let rec union l1 l2 = 
+    let rec f x l = match l with 
+    | [] -> true 
+    | hd::tl -> if x = hd then false 
+    else f x tl in match l2 with 
+    | [] -> l1 
+    | hd::tl -> if f hd l1 then union (hd::l1) tl 
+    else union l1 tl ;;
+
+(* Toute les permutation à faire entre 2 termes *)
+let rec fly t1 t2 buf = 
+  if (t1 = t2) then buf 
+  else if (permcontain t1 t2 buf) then buf 
+  else if t1.ar>=1 && t1.ar == t2.ar && (String.equal t1.name t2.name) then 
+    let rec flyh l1 l2 buff = match l1,l2 with 
+    |[],[] -> buff 
+    |t::q,hd::tl -> if (fly t hd buff = buff || t=hd) then buff 
+    else union (buf@(fly t hd buff)) (flyh q tl (buf@(fly t hd buff))) 
+  in flyh t1.arg t2.arg buf 
+else buf@[{left = t1 ; right = t2; var = { name= ("Z"^(Int.to_string(List.length buf))) ; ar= (-1) ; arg=[] } }] ;;
+  (* Anti-unification *)
+  let rec antiuni (t1:terme) (t2:terme) (buf: perm list) = 
+    if t1.ar>=1 && t1.ar == t2.ar && (String.equal t1.name t2.name) then
+        {name=t1.name ; ar =t1.ar ; arg =
+        let rec lantiuni l1 l2 b = match l1,l2 with 
+        | [],[] -> []; 
+        | t::q , hd::tl -> [antiuni t hd b]@(lantiuni q tl (fly t hd b)) 
+      in lantiuni t1.arg t2.arg (fly t1 t2 buf) } 
+    else if (t1.ar == t2.ar && (String.equal t1.name t2.name))then t1 
+    else if (permcontain t1 t2 buf) then (getperm t1 t2 buf)
+      else { name= ("Z"^(Int.to_string(List.length buf))) ; ar= (-1) ; arg=[] } ;; 
 
 
