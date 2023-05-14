@@ -143,20 +143,47 @@ let rec sub_term eq l  =
 let rec sub_eq eq l =
   match l with
   | [] -> []
-  | t::q -> if(String.equal eq.left.name t.left.name) then 
-              if (String.equal eq.right.name t.right.name) then 
+  | t::q -> if(String.equal eq.left.name t.left.name) then (* X=.. , X=..*)
+              if (String.equal eq.right.name t.right.name) then (* X=f , X=f*)
                 sub_eq eq q
-              else if (eq.left.ar == -1) then 
+              else if (eq.right.ar == -1) then  (*X=f X=g *)
+                    if (variable_est_repeter eq.right.name t.right.arg ) then
+                      failwith "kmok (X=U, X=f(u)) 2"
+                    else
                       [t]@sub_eq eq q
-                    else  if (t.right.ar == -1) then 
+                      (* failwith "kmok (X=a, X=f(t)) 1" *)
+                  else  if (t.right.ar == -1) then
+                          if (variable_est_repeter t.right.name eq.right.arg) then
+                            failwith "kmok (X=U, X=f(u)) 2"
+                          else 
                             [t]@sub_eq eq q
-                          else  failwith "kmok (X=a, X=f(t))"
-            else if (eq.right.ar <=0 && t.right.ar > 0) then (* X=a , Y=f(...) *)
+
+                          else  failwith "kmok (X=a, X=f(t)) 2"
+            else 
+               if (String.equal eq.left.name t.right.name ) then 
+              if (variable_est_repeter t.left.name eq.right.arg) then
+                failwith "kmok (X=f(..), U=X)"
+              else 
+                 let teerm = {left=t.left; right=eq.right} in
+                  [t]@[teerm]@sub_eq eq q 
+                
+              else if (String.equal eq.right.name t.left.name ) then 
+                if (variable_est_repeter eq.left.name t.right.arg) then
+                  failwith "kmok (X=f(..), U=X)"
+                else 
+                   let teerm = {left=eq.left; right=t.right} in
+                    [t]@[teerm]@sub_eq eq q 
+                  
+                else  if (eq.right.ar <=0 && t.right.ar > 0) then (* X=a , Y=f(...) *)
                   let args = (sub_term eq  t.right.arg) in
                   let termm = {name = t.right.name ; ar = t.right.ar ; arg = args} in
                   let eqq = {left = t.left ; right = termm } in
                   [eqq]@sub_eq eq q
                 else  [t]@sub_eq eq q ;;
+              (* else  let args = (sub_term eq  t.right.arg) in
+                    let termm = {name = t.right.name ; ar = t.right.ar ; arg = args} in
+                    let eqq = {left = t.left ; right = termm } in
+                    [eqq]@sub_eq eq q ;; *)
 
 
 (* fait les substitutions sur entre les equations d'in system *)
@@ -171,11 +198,11 @@ let rec unifier_args args sys  =
 match args with
 | [] -> []
 | arg::q -> match sys with
-| [] -> []      
-|  eq::qq -> if (String.equal arg.name eq.left.name) then 
-                [eq.right]@unifier_args q sys
-            else let term = unifier_term arg qq in
-                [term]@unifier_args  q sys 
+        | [] -> []      
+        |  eq::qq -> if (String.equal arg.name eq.left.name) then 
+                        [eq.right]@unifier_args q sys
+                    else let term = unifier_term arg sys in
+                        [term]@unifier_args  q sys 
 
                 and  
 (* unifier un terme par une liste d'equations *)          
@@ -183,17 +210,20 @@ unifier_term term (sys:eq list) =
             match sys with
             | [] -> term  
             | eq::q -> if (String.equal term.name eq.left.name) then 
-                              eq.right
+                           eq.right
                       else if (term.ar <= 0) then
                         term
                           else  
                             let args = unifier_args term.arg sys in
-                            let termm = {name = term.name ; ar = term.ar ; arg = term.arg} in
-                            termm ;;
+                            let termm = {name = term.name ; ar = term.ar ; arg = args} in
+                            (unifier_term termm q)  ;;
 
 
 (* (unif_term (part "F(t,g(a),X)") (part "F(Z,g(Y),t)")) ;; *)
-(remp_sys (simple_sys (unif_term (part "F(t,g(a,k(X)),X,K)") (part "F(Z,g(Y,O),t,i)"))  []) []);;
+(* (simple_sys (unif_term (part "h(f(X),T,b)") (part "h(f(U),g(U,U),U)"))  []) ;; *)
+(remp_sys (simple_sys (unif_term (part "h(f(X),T,b)") (part "h(f(U),g(U,U),U)"))  []) []);; 
+
+(unifier_term (part "h(f(X),T,b)") (remp_sys (simple_sys (unif_term (part "h(f(X),T,b)") (part "h(f(U),g(U,U),U)"))  []) [])) ;;
 (*getters*)
 let getn x = x.name ;;
 let geta x = x.ar ;;
