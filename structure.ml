@@ -85,10 +85,9 @@ else if (term1.ar == term2.ar && (String.equal term1.name term2.name)) then
     | [],_ -> []
     | t::q , x::y -> (unif_term t x)@(unif_arg q y) in
   (unif_arg term1.arg term2.arg)
-else failwith "kmok (differentes arités ou differentes noms)" ;;
+else failwith "(differentes arités ou differentes noms)" ;;
 
-(* unif_term (part "F(toz,g(a),X)") (part "F(Zebi,g(u),t)") ;; *)
-
+(* verfie la presence d'une variable dans un terme *)
 let rec variable_est_repeter (variable : string) (args:terme list) = 
   match args with
   | [] -> false
@@ -104,14 +103,14 @@ let rec simple_sys (l:eq list) acc =
   | t::q ->
     if (String.equal t.right.name t.left.name)  then 
         if (t.right.ar > 0 && t.left.ar > 0 && t.right.ar!= t.left.ar ) then (*f(X)=f(Y,Z)*)
-          failwith "kmok (f(X)=f(Y,Z))"
+          failwith "(f(X)=f(Y,Z))"
         else if (t.right.ar < 1 && t.left.ar < 1) then  (* X=X; a=a *)
           (simple_sys q acc) 
         else
             (simple_sys (append (unif_term t.left t.right) q) acc)        
       else 
         if (t.right.ar == 0 && t.left.ar == 0) then
-          failwith "kmok (a=b)"
+          failwith "(a=b)"
 
         else if (t.left.ar >= 0 && t.right.ar == -1 ) then (* a=X ; f(X)=X *)
           let e = {right = t.left ; left = t.right} in
@@ -121,7 +120,7 @@ let rec simple_sys (l:eq list) acc =
                 else if (t.right.ar > 0) then (* x=f(..) *)
                   let tt = t.right in
                   if ( variable_est_repeter t.left.name t.right.arg ) then (* x=f(X) *)
-                    failwith "kmok (x=f(X))"
+                    failwith "(x=f(X))"
                   else (* x=f(Y) *)
                     simple_sys q  [t]@acc 
                 else   (* X=Y *)
@@ -148,7 +147,7 @@ let rec sub_eq eq l =
                 sub_eq eq q
               else if (eq.right.ar == -1) then  (*X=f X=g *)
                     if (variable_est_repeter eq.right.name t.right.arg ) then
-                      failwith "kmok (X=U, X=f(u)) 2"
+                      failwith "(X=U, X=f(u)) 2"
                     else
                       [t]@sub_eq eq q
                       (* failwith "kmok (X=a, X=f(t)) 1" *)
@@ -219,11 +218,7 @@ unifier_term term (sys:eq list) =
                             (unifier_term termm q)  ;;
 
 
-(* (unif_term (part "F(t,g(a),X)") (part "F(Z,g(Y),t)")) ;; *)
-(* (simple_sys (unif_term (part "h(f(X),T,b)") (part "h(f(U),g(U,U),U)"))  []) ;; *)
-(remp_sys (simple_sys (unif_term (part "h(f(X),T,b)") (part "h(f(U),g(U,U),U)"))  []) []);; 
 
-(unifier_term (part "h(f(X),T,b)") (remp_sys (simple_sys (unif_term (part "h(f(X),T,b)") (part "h(f(U),g(U,U),U)"))  []) [])) ;;
 (*getters*)
 let getn x = x.name ;;
 let geta x = x.ar ;;
@@ -274,9 +269,9 @@ let rec fly t1 t2 buf =
     |t::q,hd::tl -> if (fly t hd buff = buff || t=hd) then buff 
     else union (buf@(fly t hd buff)) (flyh q tl (buf@(fly t hd buff))) 
   in flyh t1.arg t2.arg buf 
-else buf@[{left = t1 ; right = t2; var = { name= ("Z"^(Int.to_string(List.length buf))) ; ar= (-1) ; arg=[] } }] ;;
+  else buf@[{left = t1 ; right = t2; var = { name= ("Z"^(Int.to_string(List.length buf))) ; ar= (-1) ; arg=[] } }] ;;
   (* Anti-unification *)
-  let rec antiuni (t1:terme) (t2:terme) (buf: perm list) = 
+let rec antiuni (t1:terme) (t2:terme) (buf: perm list) = 
     if t1.ar>=1 && t1.ar == t2.ar && (String.equal t1.name t2.name) then
         {name=t1.name ; ar =t1.ar ; arg =
         let rec lantiuni l1 l2 b = match l1,l2 with 
@@ -287,4 +282,10 @@ else buf@[{left = t1 ; right = t2; var = { name= ("Z"^(Int.to_string(List.length
     else if (permcontain t1 t2 buf) then (getperm t1 t2 buf)
       else { name= ("Z"^(Int.to_string(List.length buf))) ; ar= (-1) ; arg=[] } ;; 
 
+let antiunif t1 t2 =
+  t2s (antiuni (part t1) (part t2) []);;
+
+let unif t1 t2 = 
+  t2s (unifier_term (part t1) (remp_sys (simple_sys (unif_term (part t1) (part t2))  []) [])) ;;
+;;
 
